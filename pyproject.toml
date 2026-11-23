@@ -7,7 +7,11 @@ authors = [
     { name = "AbdulRahmanIslam1212", email = "servantofthemerciful611@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "numba>=0.68.1",
+    "numpy>=2.5.5",
+    "pygame-ce>=2.5.8",
+]
 
 [project.scripts]
 fractal-plotter = "fractal_plotter:main"
