@@ -1,18 +1,39 @@
 import pygame
-from compute import mandelbrot, pixel_to_complex
+from compute import render, pixel_to_complex, MANDELBROT, JULIA, SHIP
 from graph import colorize
 import math
 import numpy as np
 
+C_SPEED = 0.4  # units of c per second
+C_FINE = 0.1  # multiplier while holding Ctrl, for precise tuning
+
 PAN_SPEED = 400  # screen pixels per second
 BOOST = 3.0  # multiplier while holding shift
 
-WIDTH, HEIGHT = 1920, 1080
+WIDTH, HEIGHT = 1280, 720
 BASE_ITER = 1024
 DEFAULT_SCALE = 3.0 / WIDTH
 
+VIEWS = {
+    MANDELBROT: ((-0.5, 0.0), 3.0 / WIDTH),
+    JULIA: ((0.0, 0.0), 3.0 / WIDTH),
+    SHIP: ((-0.5, 0.5), 3.5 / WIDTH),
+}
+NAMES = {"mandelbrot": MANDELBROT, "julia": JULIA, "ship": SHIP}
+KEY_TO_MODE = {pygame.K_1: MANDELBROT, pygame.K_2: JULIA, pygame.K_3: SHIP}
+
 
 def main() -> None:
+    input_mode = (
+        input("Fractal (mandelbrot/julia/ship) [mandelbrot]: ").strip().lower()
+        or "mandelbrot"
+    )
+    if input_mode not in NAMES:
+        raise SystemExit(
+            f"Unknown fractal '{input_mode}'. Choose from: {', '.join(NAMES)}"
+        )
+    mode = NAMES[input_mode]
+    julia_c = (-0.8, 0.156)
     input_span = input("Enter a span (leave empty if you dont want to): ")
     input_real = input("Enter a real component (leave empty if you dont want to): ")
     input_imag = input(
@@ -20,9 +41,7 @@ def main() -> None:
     )
 
     if not input_span or not input_real or not input_imag:
-        center = (-0.5, 0.0)
-        scale = DEFAULT_SCALE
-
+        center, scale = VIEWS[mode]
     else:
         try:
             center = (float(input_real), -float(input_imag))
@@ -57,8 +76,18 @@ def main() -> None:
                 max_iter = int(BASE_ITER + 50 * math.log2(DEFAULT_SCALE / scale))
                 dirty = True
 
+            elif event.type == pygame.KEYDOWN:
+                if event.key in KEY_TO_MODE:
+                    mode = KEY_TO_MODE[event.key]
+                    center, scale = VIEWS[mode]
+                    max_iter = BASE_ITER
+                    dirty = True
+                elif event.key == pygame.K_r:
+                    center, scale = VIEWS[mode]
+                    max_iter = BASE_ITER
+                    dirty = True
         if dirty:
-            counts = mandelbrot(HEIGHT, WIDTH, center, scale, max_iter)
+            counts = render(HEIGHT, WIDTH, center, scale, max_iter, mode, julia_c)
             rgb = colorize(counts, max_iter)
             surface = pygame.image.frombuffer(
                 np.ascontiguousarray(rgb).tobytes(), (WIDTH, HEIGHT), "RGB"
@@ -80,6 +109,19 @@ def main() -> None:
             step = speed * dt * scale / norm
             center = (center[0] + dx * step, center[1] + dy * step)
             dirty = True
+
+        if mode == JULIA:
+            ax = keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]
+            ay = keys[pygame.K_UP] - keys[pygame.K_DOWN]
+            if ax or ay:
+                speed = C_SPEED * (C_FINE if keys[pygame.K_LCTRL] else 1.0)
+                norm = math.hypot(ax, ay)
+                step = speed * dt / norm
+                cr = max(-2.0, min(2.0, julia_c[0] + ax * step))
+                ci = max(-2.0, min(2.0, julia_c[1] + ay * step))
+                julia_c = (cr, ci)
+                pygame.display.set_caption(f"Julia  c = {cr:.4f} {ci:+.4f}i")
+                dirty = True
 
     pygame.quit()
 
