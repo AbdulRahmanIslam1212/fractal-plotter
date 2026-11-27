@@ -3,6 +3,11 @@ from compute import render, pixel_to_complex, MANDELBROT, JULIA, SHIP
 from graph import colorize
 import math
 import numpy as np
+import json
+import time
+from pathlib import Path
+
+EXPORT_DIR = Path("exports")
 
 C_SPEED = 0.4  # units of c per second
 C_FINE = 0.1  # multiplier while holding Ctrl, for precise tuning
@@ -22,6 +27,31 @@ VIEWS = {
 NAMES = {"mandelbrot": MANDELBROT, "julia": JULIA, "ship": SHIP}
 KEY_TO_MODE = {pygame.K_1: MANDELBROT, pygame.K_2: JULIA, pygame.K_3: SHIP}
 
+MODE_NAMES = {v: k for k, v in NAMES.items()}
+
+
+def export_view(surface, mode, center, scale, max_iter, julia_c, with_image=True):
+    EXPORT_DIR.mkdir(exist_ok=True)
+    stem = EXPORT_DIR / f"{MODE_NAMES[mode]}_{time.strftime('%Y%m%d_%H%M%S')}"
+
+    meta = {
+        "version": 1,
+        "fractal": MODE_NAMES[mode],
+        "julia_c": list(julia_c) if mode == JULIA else None,
+        "center": list(center),
+        "scale": scale,  # source of truth
+        "vertical_span": scale * HEIGHT,  # informational
+        "zoom": DEFAULT_SCALE / scale,  # informational
+        "max_iter": max_iter,
+        "width": WIDTH,
+        "height": HEIGHT,
+    }
+    stem.with_suffix(".json").write_text(json.dumps(meta, indent=2))
+
+    if with_image:
+        pygame.image.save(surface, str(stem.with_suffix(".png")))
+    return stem
+
 
 def main() -> None:
     input_mode = (
@@ -33,7 +63,7 @@ def main() -> None:
             f"Unknown fractal '{input_mode}'. Choose from: {', '.join(NAMES)}"
         )
     mode = NAMES[input_mode]
-    julia_c = (-0.8, 0.156)
+    julia_c = (-0.12256, 0.74486)  # Default: Douady rabbit
     input_span = input("Enter a span (leave empty if you dont want to): ")
     input_real = input("Enter a real component (leave empty if you dont want to): ")
     input_imag = input(
@@ -86,6 +116,12 @@ def main() -> None:
                     center, scale = VIEWS[mode]
                     max_iter = BASE_ITER
                     dirty = True
+                elif event.key == pygame.K_e and surface is not None:
+                    image = not (event.mod & pygame.KMOD_SHIFT)
+                    stem = export_view(
+                        surface, mode, center, scale, max_iter, julia_c, image
+                    )
+                    pygame.display.set_caption(f"Saved {stem.name}!")
         if dirty:
             counts = render(HEIGHT, WIDTH, center, scale, max_iter, mode, julia_c)
             rgb = colorize(counts, max_iter)
